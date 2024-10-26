@@ -1,0 +1,409 @@
+---
+title: "Wyatt Lefkowitz - Mariners Analytics Internship - Problem 2 Code"
+output: html_document
+date: "2024-10-25"
+---
+
+```{r}
+# Load necessary libraries
+library(readr) # for loading in csv
+library(dplyr) # many data manipulation functions
+library(tidyr) # data help
+library(tidyverse) # more data help
+library(ggplot2) # data vis packages
+```
+
+
+```{r}
+# Loading the data in
+train_data <- read.csv("/Users/owner/desktop/data-train.csv")
+```
+
+```{r}
+# Rounding as we need whole numbers for the insights that will be generated
+train_data <- train_data %>%
+  mutate(
+    horz_exit_angle = round(horz_exit_angle),
+    exit_speed = round(exit_speed),
+    vert_exit_angle = round(vert_exit_angle),
+    hit_spin_rate = round(hit_spin_rate)
+  )
+```
+
+```{r}
+# 15411's results
+data_15411 <- train_data %>%
+  filter(( cf_id == 15411 ) & 
+         (first_fielder == 15411 | is.na(first_fielder)))
+
+# Results not including 15411 to compare to
+data_not_15411 <- train_data %>%
+  filter(cf_id != 15411 &         
+         (is.na(first_fielder) | first_fielder == cf_id))
+
+# Only horz exit angles within +20 and -20 are in the range of a CF
+data_15411 <- data_15411 %>%
+  filter(horz_exit_angle >= -20 & horz_exit_angle <= 20)
+
+data_not_15411 <- data_not_15411 %>%
+  filter(horz_exit_angle >= -20 & horz_exit_angle <= 20)
+```
+
+```{r}
+# Calculate the percentage of is_airout being 1 for each horz_exit_angle
+percentage_data_15411_horz <- data_15411 %>%
+  group_by(horz_exit_angle) %>%
+  summarize(
+    is_airout_one_count = sum(is_airout == 1, na.rm = TRUE),
+    total_count = n(),                                         
+    percentage = (is_airout_one_count / total_count) * 100    
+  ) %>%
+  ungroup() 
+
+# Calculate the percentage of is_airout being 1 for each horz_exit_angle for
+# the other data set
+percentage_data_not_15411_horz <- data_not_15411 %>%
+  group_by(horz_exit_angle) %>%
+  summarize(
+    is_airout_one_count = sum(is_airout == 1, na.rm = TRUE),
+    total_count = n(),                                          
+    percentage = (is_airout_one_count / total_count) * 100    
+  ) %>%
+  ungroup()  
+```
+
+```{r}
+# Joining data frames for comparison analysis
+merged_data_horz <- percentage_data_15411_horz %>%
+  left_join(percentage_data_not_15411_horz, by = "horz_exit_angle", 
+            suffix = c("_15411", "_not_15411"))
+
+# Calculate the difference in catch probabilities and make final table
+final_table_horz <- merged_data_horz %>%
+  mutate(difference = percentage_15411 - percentage_not_15411) %>%
+  select(total_count_15411, horz_exit_angle, percentage_15411, 
+         percentage_not_15411, difference)
+
+# Normalize the difference based on sample size and then scale it to a 
+# percentage
+final_table_horz <- final_table_horz %>%
+  mutate(difference_normalized = 100 * difference 
+         * (total_count_15411/sum(total_count_15411)))
+```
+
+```{r}
+# Plot displaying 15411's outfield defense from a horizontal exit angle 
+# perspective
+
+ggplot(final_table_horz, aes(x = horz_exit_angle, y = difference_normalized, 
+                        color = difference_normalized > 0)) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("TRUE" = "green", "FALSE" = "red")) +
+  labs(
+    title = "Normalized Difference by Horizontal Exit Angle",
+    x = "Horizontal Exit Angle",
+    y = "Difference Normalized"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+# Create bins for horz_exit_angle based on the specified ranges
+final_table_group_horz <- final_table_horz %>%
+  mutate(angle_group = case_when(
+    horz_exit_angle >= -20 & horz_exit_angle <= -14 |  
+    horz_exit_angle >= 14  & horz_exit_angle <= 20 ~ "Hard",
+    horz_exit_angle >= 6 & horz_exit_angle < 14    | 
+    horz_exit_angle <= -6  & horz_exit_angle > -14 ~ "Medium",
+    horz_exit_angle >= -6  & horz_exit_angle < 0   | 
+    horz_exit_angle >= 0   & horz_exit_angle < 6 ~ "Easy",
+    TRUE ~ NA_character_
+  ))
+
+# Summarize the data
+summarized_data_horz <- final_table_group_horz %>%
+  group_by(angle_group) %>%
+  summarise(
+    sum_difference_normalized = sum(difference_normalized, na.rm = TRUE),
+    .groups = 'drop'  # Ungroup after summarizing
+  )
+
+# View the summarized data
+print(summarized_data_horz)
+```
+
+```{r}
+# Create bins for horz_exit_angle based on left versus right
+final_table_group_RL <- final_table_horz %>%
+  mutate(RL_group = case_when(
+    horz_exit_angle > 0 ~ "To the outfielders right",
+    horz_exit_angle < 0 ~ "To the outfielders left",
+    horz_exit_angle == 0 ~ "Directly Straight",
+    TRUE ~ NA_character_  # Handle cases outside defined ranges
+  ))
+
+# Summarize the data
+summarized_data_RL <- final_table_group_RL %>%
+  group_by(RL_group) %>%
+  summarise(
+    sum_difference_normalized = sum(difference_normalized, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+# View the summarized data
+print(summarized_data_RL)
+```
+
+---------------------------------------------
+
+```{r}
+# Calculate the percentage of is_airout being 1 for each vert_exit_angle
+percentage_data_15411_vert <- data_15411 %>%
+  group_by(vert_exit_angle) %>%
+  summarize(
+    is_airout_one_count = sum(is_airout == 1, na.rm = TRUE),
+    total_count = n(),                                         
+    percentage = (is_airout_one_count / total_count) * 100    
+  ) %>%
+  ungroup() 
+
+# Calculate the percentage of is_airout being 1 for each vert_exit_angle for
+# the other data set
+percentage_data_not_15411_vert <- data_not_15411 %>%
+  group_by(vert_exit_angle) %>%
+  summarize(
+    is_airout_one_count = sum(is_airout == 1, na.rm = TRUE),
+    total_count = n(),                                          
+    percentage = (is_airout_one_count / total_count) * 100    
+  ) %>%
+  ungroup()  
+```
+
+```{r}
+# Joining data frames for comparison analysis
+merged_data_vert <- percentage_data_15411_vert %>%
+  left_join(percentage_data_not_15411_vert, by = "vert_exit_angle", 
+            suffix = c("_15411", "_not_15411"))
+
+# Calculate the difference in catch probabilities and make final table
+final_table_vert <- merged_data_vert %>%
+  mutate(difference = percentage_15411 - percentage_not_15411) %>%
+  select(total_count_15411, vert_exit_angle, percentage_15411, 
+         percentage_not_15411, difference)
+
+# Normalize the difference based on sample size and then scale it to a 
+# percentage
+final_table_vert <- final_table_vert %>%
+  mutate(difference_normalized = 100 * difference 
+         * (total_count_15411/sum(total_count_15411)))
+```
+
+```{r}
+# Plot displaying 15411's outfield defense from a vertical exit angle 
+# perspective
+
+ggplot(final_table_vert, aes(x = vert_exit_angle, y = difference_normalized, 
+                        color = difference_normalized > 0)) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("TRUE" = "green", "FALSE" = "red")) +
+  labs(
+    title = "Normalized Difference by Vertical Exit Angle",
+    x = "Vertical Exit Angle",
+    y = "Difference Normalized"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+# Create bins for vert_exit_angle based on the specified ranges
+final_table_group_vert <- final_table_vert %>%
+  mutate(angle_group = case_when(
+    vert_exit_angle >= 4 & vert_exit_angle < 25 ~ "Line Drive",
+    vert_exit_angle >= 25  & vert_exit_angle < 50 ~ "Fly Out",
+    vert_exit_angle >= 50 ~ "Pop Out",
+    TRUE ~ NA_character_
+  ))
+
+# Summarize the data
+summarized_data_vert <- final_table_group_vert %>%
+  group_by(angle_group) %>%
+  summarise(
+    sum_difference_normalized = sum(difference_normalized, na.rm = TRUE),
+    .groups = 'drop'  # Ungroup after summarizing
+  )
+
+# View the summarized data
+print(summarized_data_vert)
+```
+
+-----------------------------------------
+
+```{r}
+# Calculate the percentage of is_airout being 1 for each exit_speed
+percentage_data_15411_es <- data_15411 %>%
+  group_by(exit_speed) %>%
+  summarize(
+    is_airout_one_count = sum(is_airout == 1, na.rm = TRUE),
+    total_count = n(),                                         
+    percentage = (is_airout_one_count / total_count) * 100    
+  ) %>%
+  ungroup() 
+
+# Calculate the percentage of is_airout being 1 for each exit_speed for
+# the other data set
+percentage_data_not_15411_es <- data_not_15411 %>%
+  group_by(exit_speed) %>%
+  summarize(
+    is_airout_one_count = sum(is_airout == 1, na.rm = TRUE),
+    total_count = n(),                                          
+    percentage = (is_airout_one_count / total_count) * 100    
+  ) %>%
+  ungroup()  
+```
+
+```{r}
+# Joining data frames for comparison analysis
+merged_data_es <- percentage_data_15411_es %>%
+  left_join(percentage_data_not_15411_es, by = "exit_speed", 
+            suffix = c("_15411", "_not_15411"))
+
+# Calculate the difference in catch probabilities and make final table
+final_table_es <- merged_data_es %>%
+  mutate(difference = percentage_15411 - percentage_not_15411) %>%
+  select(total_count_15411, exit_speed, percentage_15411, 
+         percentage_not_15411, difference)
+
+# Normalize the difference based on sample size and then scale it to a 
+# percentage
+final_table_es <- final_table_es %>%
+  mutate(difference_normalized = 100 * difference 
+         * (total_count_15411/sum(total_count_15411)))
+```
+
+```{r}
+# Plot displaying 15411's outfield defense from a exit speed perspective
+
+ggplot(final_table_es, aes(x = exit_speed, y = difference_normalized, 
+                        color = difference_normalized > 0)) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("TRUE" = "green", "FALSE" = "red")) +
+  labs(
+    title = "Normalized Difference by Vertical Exit Angle",
+    x = "Exit Speed",
+    y = "Difference Normalized"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+# Create bins for exit_speed based on the specified ranges
+final_table_group_es <- final_table_es %>%
+  mutate(speed_group = case_when(
+    exit_speed < 80 ~ "Soft",
+    exit_speed >= 80  & exit_speed < 95 ~ "Medium",
+    exit_speed >= 95 ~ "Hard",
+    TRUE ~ NA_character_
+  ))
+
+# Summarize the data
+summarized_data_es <- final_table_group_es %>%
+  group_by(speed_group) %>%
+  summarise(
+    sum_difference_normalized = sum(difference_normalized, na.rm = TRUE),
+    .groups = 
+  )
+
+# View the summarized data
+print(summarized_data_es)
+```
+
+-------------------------------------------------
+
+```{r}
+# Calculate the percentage of is_airout being 1 for each hit_spin_rate
+percentage_data_15411_sr <- data_15411 %>%
+  group_by(hit_spin_rate) %>%
+  summarize(
+    is_airout_one_count = sum(is_airout == 1, na.rm = TRUE),
+    total_count = n(),                                         
+    percentage = (is_airout_one_count / total_count) * 100    
+  ) %>%
+  ungroup() 
+
+# Calculate the percentage of is_airout being 1 for each hit_spin_rate for
+# the other data set
+percentage_data_not_15411_sr <- data_not_15411 %>%
+  group_by(hit_spin_rate) %>%
+  summarize(
+    is_airout_one_count = sum(is_airout == 1, na.rm = TRUE),
+    total_count = n(),                                          
+    percentage = (is_airout_one_count / total_count) * 100    
+  ) %>%
+  ungroup()  
+```
+
+```{r}
+# Joining data frames for comparison analysis
+merged_data_sr <- percentage_data_15411_sr %>%
+  left_join(percentage_data_not_15411_sr, by = "hit_spin_rate", 
+            suffix = c("_15411", "_not_15411"))
+
+# Calculate the difference in catch probabilities and make final table
+final_table_sr <- merged_data_sr %>%
+  mutate(difference = percentage_15411 - percentage_not_15411) %>%
+  select(total_count_15411, hit_spin_rate, percentage_15411, 
+         percentage_not_15411, difference)
+
+# Normalize the difference based on sample size and then scale it to a 
+# percentage
+final_table_sr <- final_table_sr %>%
+  mutate(difference_normalized = 100 * difference 
+         * (total_count_15411/sum(total_count_15411)))
+```
+
+```{r}
+# Plot displaying 15411's outfield defense from a hit spin rate 
+# perspective
+
+ggplot(final_table_sr, aes(x = hit_spin_rate, y = difference_normalized, 
+                        color = difference_normalized > 0)) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("TRUE" = "green", "FALSE" = "red")) +
+  labs(
+    title = "Normalized Difference by Hit Spin Rate",
+    x = "hit_spin_rate",
+    y = "Difference Normalized"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+# Create bins for hit_spin_rate based on the specified ranges
+final_table_group_sr <- final_table_sr %>%
+  mutate(spin_group = case_when(
+    hit_spin_rate < 2000 ~ "Little Spin",
+    hit_spin_rate >= 2000  & hit_spin_rate < 4000 ~ "Some Spin",
+    hit_spin_rate >= 4000 ~ "Heavy Spin",
+    TRUE ~ NA_character_
+  ))
+
+# Summarize the data
+summarized_data_sr <- final_table_group_sr %>%
+  group_by(spin_group) %>%
+  summarise(
+    sum_difference_normalized = sum(difference_normalized, na.rm = TRUE),
+    .groups = 'drop'  
+  )
+
+# View the summarized data
+print(summarized_data_sr)
+
+# I had issues with the results of hit_spin_rate and also am not really sure
+# it translates all that well to outfield defense, at least not from a 
+# coaching perspective. So, I'll leave my code in but not reference it in my
+# breakdown for a coaching audience.
+```
