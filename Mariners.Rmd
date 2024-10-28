@@ -1,5 +1,5 @@
 ---
-title: "Wyatt Lefkowitz - Mariners Analytics Internship - Problem 1 Code"
+title: "Wyatt Lefkowitz - Outfield Defense Model - Problem 1 Code"
 output: html_document
 date: "2024-10-26"
 ---
