@@ -4,6 +4,10 @@ output: html_document
 date: "2024-10-26"
 ---
 
+# The objective is to predict the air out probability for batted 
+# balls in the `data-test.csv` file and fill out the `p_airout` 
+# column in that .csv with my estimates. 
+
 ```{r}
 # Load necessary libraries
 library(readr) # for loading in csv
